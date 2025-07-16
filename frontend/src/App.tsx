@@ -25,15 +25,17 @@ function App() {
         const decoder = new TextDecoder("utf-8");
         if (!reader) return;
 
-        let done = false;
-        while (!done) {
-            const { value, done: readerDone } = await reader.read();
-            done = readerDone;
-            if (value) {
-                setText((prev) => prev + decoder.decode(value, { stream: !done }));
+        // потоковое чтение с мгновенным выводом
+        const pump = async () => {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                setText((prev) => prev + chunk);
             }
-        }
-        setLoading(false);
+            setLoading(false);
+        };
+        await pump();
     };
 
     return (
