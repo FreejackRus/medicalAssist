@@ -16,7 +16,7 @@ function App() {
         const form = new FormData();
         form.append("pdf", file);
 
-        const res = await fetch("/generate-stream", {
+        const res = await fetch("/generate", {
             method: "POST",
             body: form,
         });
