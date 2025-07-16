@@ -61,3 +61,26 @@ async def generate_algorithm(pdf: UploadFile = File(...)):
             os.remove(tmp_path)
 
     return StreamingResponse(event_stream(), media_type="text/plain")
+
+    def stream_generate(prompt: str) -> Generator[str, None, None]:
+        # Пример: просто отправляем prompt в Ollama и стримим ответ
+        stream = ollama.chat(
+            model="hf.co/unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF:Q6_K",
+            messages=[{"role": "user", "content": prompt}],
+            stream=True,
+        )
+        for chunk in stream:
+            yield chunk["message"]["content"]
+
+    @app.post("/generate-stream")
+    async def generate_stream(pdf: UploadFile = File(...)):
+        # 1) прочитать PDF (коротко, без разбиения на разделы)
+        text = (await pdf.read()).decode(errors="ignore")
+        prompt = f"Составь алгоритм по клиническим рекомендациям:\n{text[:4000]}"
+
+        # 2) вернуть SSE-стрим
+        return StreamingResponse(
+            stream_generate(prompt),
+            media_type="text/plain",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )

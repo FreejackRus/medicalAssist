@@ -1,57 +1,51 @@
-import React, { useState, useRef } from "react";
-import { generateAlgorithm } from "./api";
-
-type Message = { role: "user" | "bot"; text: string };
+// src/App.tsx
+import { useState, ChangeEvent } from "react";
+import "./App.css";
 
 function App() {
-    const [messages, setMessages] = useState<Message[]>([]);
-    const [loading, setLoading] = useState(false);
-    const fileRef = useRef<HTMLInputElement>(null);
+    const [text, setText] = useState<string>("");
+    const [loading, setLoading] = useState<boolean>(false);
 
-    const handleUpload = async () => {
-        const file = fileRef.current?.files?.[0];
+    const handleUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
         if (!file) return;
+
+        setText("");
         setLoading(true);
-        setMessages([{ role: "user", text: `📄 ${file.name}` }]);
-        try {
-            await generateAlgorithm(file, (chunk) => {
-                setMessages((prev) => {
-                    const last = prev[prev.length - 1];
-                    if (last?.role === "bot") {
-                        return [
-                            ...prev.slice(0, -1),
-                            { role: "bot", text: last.text + chunk },
-                        ];
-                    }
-                    return [...prev, { role: "bot", text: chunk }];
-                });
-            });
-        } catch (e) {
-            setMessages((prev) => [
-                ...prev,
-                { role: "bot", text: "❌ Ошибка: " + (e as Error).message },
-            ]);
-        } finally {
-            setLoading(false);
+
+        const form = new FormData();
+        form.append("pdf", file);
+
+        const res = await fetch("/generate-stream", {
+            method: "POST",
+            body: form,
+        });
+
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder("utf-8");
+        if (!reader) return;
+
+        let done = false;
+        while (!done) {
+            const { value, done: readerDone } = await reader.read();
+            done = readerDone;
+            if (value) {
+                setText((prev) => prev + decoder.decode(value, { stream: !done }));
+            }
         }
+        setLoading(false);
     };
 
     return (
-        <div style={{ maxWidth: 800, margin: "0 auto", padding: 24 }}>
-            <h2>Медицинский ассистент</h2>
-            <input type="file" accept=".pdf" ref={fileRef} />
-            <button onClick={handleUpload} disabled={loading}>
-                {loading ? "Генерирую…" : "Сгенерировать алгоритм"}
-            </button>
+        <div className="container">
+            <h1>Медицинский ассистент</h1>
+            <p>Загрузите PDF-файл с клиническими рекомендациями</p>
 
-            <div style={{ marginTop: 24, whiteSpace: "pre-wrap" }}>
-                {messages.map((m, i) => (
-                    <div key={i} style={{ marginBottom: 8 }}>
-                        <strong>{m.role === "user" ? "Вы: " : "ИИ: "}</strong>
-                        {m.text}
-                    </div>
-                ))}
-            </div>
+            <input type="file" accept=".pdf" onChange={handleUpload} />
+
+            {loading && <p>⏳ Генерирую алгоритм…</p>}
+
+            <pre style={{ whiteSpace: "pre-wrap", marginTop: 24 }}>{text}</pre>
         </div>
     );
 }
